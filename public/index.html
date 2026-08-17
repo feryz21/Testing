@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Display Gambar QR Dynamic</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #f4f4f9; padding: 20px; }
+    .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 500px; width: 100%; text-align: center; }
+    img { max-width: 100%; height: auto; border-radius: 8px; margin-top: 15px; }
+    .admin-panel { margin-top: 25px; padding-top: 20px; border-top: 1px solid #ddd; text-align: left; }
+    input[type="text"] { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 6px; }
+    button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #0056b3; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Display Gambar Active</h2>
+    <div id="loading">Memuat gambar...</div>
+    <img id="displayImage" src="" alt="Gambar QR" class="hidden">
+
+    <!-- Panel Admin: Hanya muncul jika ada parameter ?admin=true di URL -->
+    <div id="adminPanel" class="admin-panel hidden">
+      <h3>Panel Admin</h3>
+      <label for="urlInput">Masukkan URL Gambar Baru:</label>
+      <input type="text" id="urlInput" placeholder="https://example.com/gambar.jpg">
+      <button onclick="updateImage()">Update Gambar</button>
+      <p id="statusMsg" style="margin-top: 10px; font-size: 14px; color: green;"></p>
+    </div>
+  </div>
+
+  <script>
+    // Ambil gambar saat halaman dibuka
+    async function fetchImage() {
+      try {
+        const res = await fetch('/api/image');
+        const data = await res.json();
+        const imgEl = document.getElementById('displayImage');
+        imgEl.src = data.imageUrl;
+        imgEl.classList.remove('hidden');
+        document.getElementById('loading').classList.add('hidden');
+      } catch (err) {
+        document.getElementById('loading').innerText = 'Gagal memuat gambar.';
+      }
+    }
+
+    // Fungsi untuk memperbarui URL gambar
+    async function updateImage() {
+      const url = document.getElementById('urlInput').value;
+      const statusMsg = document.getElementById('statusMsg');
+
+      if (!url) return alert('Masukkan URL gambar terlebih dahulu.');
+
+      try {
+        const res = await fetch('/api/image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageUrl: url })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          statusMsg.innerText = data.message;
+          fetchImage(); // Refresh tampilan gambar
+        } else {
+          statusMsg.innerText = 'Gagal memperbarui gambar.';
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan sistem.');
+      }
+    }
+
+    // Cek apakah halaman dibuka dalam mode admin (e.g. domain.com/?admin=true)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('admin') === 'true') {
+      document.getElementById('adminPanel').classList.remove('hidden');
+    }
+
+    fetchImage();
+  </script>
+</body>
+</html>
