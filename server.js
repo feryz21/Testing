@@ -15,6 +15,11 @@ const IMGBB_API_KEY = process.env.IMGBB_API_KEY || 'f95d0987d63323c055ddbece91a1
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Inisialisasi Database SQLite
