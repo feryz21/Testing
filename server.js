@@ -1,9 +1,18 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const multer = require('multer');
+const axios = require('axios');
+const FormData = require('form-data');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// === MASUKKAN API KEY IMGBB KAMU DI SINI ===
+const IMGBB_API_KEY = process.env.IMGBB_API_KEY || 'f95d0987d63323c055ddbece91a1470e';
+
+// Multer menggunakan RAM (Memory Storage) untuk sementara sebelum dikirim ke ImgBB
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -14,7 +23,6 @@ const db = new sqlite3.Database('./database.db', (err) => {
   else console.log('Terhubung ke database SQLite.');
 });
 
-// Buat tabel jika belum ada dan isi data awal
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS config (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -32,17 +40,35 @@ app.get('/api/image', (req, res) => {
   });
 });
 
-// Endpoint API: Perbarui URL gambar (Halaman Admin)
-app.post('/api/image', (req, res) => {
-  const { imageUrl } = req.body;
-  if (!imageUrl) return res.status(400).json({ error: 'URL Gambar wajib diisi' });
+// Endpoint API: Upload gambar langsung dari HP ke ImgBB
+app.post('/api/upload', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Tidak ada file diupload' });
 
-  db.run(`UPDATE config SET image_url = ? WHERE id = 1`, [imageUrl], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, message: 'Gambar berhasil diperbarui!' });
-  });
+    // Kirim gambar ke ImgBB
+    const formData = new FormData();
+    formData.append('image', req.file.buffer.toString('base64'));
+
+    const imgbbResponse = await axios.post(
+      `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
+      formData,
+      { headers: formData.getHeaders() }
+    );
+
+    const directImageUrl = imgbbResponse.data.data.url;
+
+    // Simpan link gambar permanen ke SQLite
+    db.run(`UPDATE config SET image_url = ? WHERE id = 1`, [directImageUrl], function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ success: true, imageUrl: directImageUrl, message: 'Gambar berhasil di-upload secara permanen!' });
+    });
+
+  } catch (error) {
+    console.error('Error Upload:', error.message);
+    res.status(500).json({ error: 'Gagal mengunggah gambar ke ImgBB.' });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server berjalan di http://localhost:${PORT}`);
+  console.log(`Server berjalan di port ${PORT}`);
 });
