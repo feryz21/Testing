@@ -29,7 +29,12 @@ db.serialize(() => {
     image_url TEXT NOT NULL
   )`);
 
-  db.run(`INSERT OR IGNORE INTO config (id, image_url) VALUES (1, 'https://picsum.photos/600/400')`);
+  // Cek apakah data sudah ada sebelum memasukkan URL default
+  db.get(`SELECT image_url FROM config WHERE id = 1`, [], (err, row) => {
+    if (!row) {
+      db.run(`INSERT INTO config (id, image_url) VALUES (1, 'https://picsum.photos/600/400')`);
+    }
+  });
 });
 
 // Endpoint API: Ambil URL gambar saat ini
