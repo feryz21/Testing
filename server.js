@@ -8,9 +8,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // === KUNCI API (Ganti dengan milikmu) ===
-const IMGBB_API_KEY = 'PASTE_API_KEY_IMGBB_KAMU';
-const JSONBIN_BIN_ID = 'PASTE_BIN_ID_KAMU';
-const JSONBIN_MASTER_KEY = 'PASTE_MASTER_KEY_KAMU';
+const IMGBB_API_KEY = 'f95d0987d63323c055ddbece91a1470e';
+const JSONBIN_BIN_ID = '6a83083af5f4af5e29204dde';
+const JSONBIN_MASTER_KEY = '$2a$10$3ABHbhti5J9x5TwmMwixle2fNiNa3fIUVlpl7tC0LimQBFH4FDj4O';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
