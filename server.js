@@ -2,84 +2,82 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const axios = require('axios');
-const FormData = require('form-data');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// === KUNCI API ===
-const IMGBB_API_KEY = 'f95d0987d63323c055ddbece91a1470e';
+// === PASTE KUNCI DARI JSONBIN DI SINI ===
 const JSONBIN_BIN_ID = '6a83083af5f4af5e29204dde';
 const JSONBIN_MASTER_KEY = '$2a$10$0kmCVoz2YzmrWjIHzOhaBuTmadAkcG6rpEJGATIxHnZ1chFV/hodO';
 
-const upload = multer({ storage: multer.memoryStorage() });
+// Gunakan memoryStorage dengan batas file maksimal 3 MB agar muat di JSONbin
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 }
+});
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 1. Endpoint Proxy Gambar (HP Pengguna Panggil Ini)
+// 1. Endpoint untuk Menampilkan Gambar (Proxy Base64 dari JSONbin)
 app.get('/api/view-image', async (req, res) => {
   try {
-    // Ambil URL ImgBB dari JSONbin
     const jsonbinRes = await axios.get(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_MASTER_KEY }
+      headers: { 'X-Master-Key': JSONBIN_MASTER_KEY },
+      timeout: 8000
     });
 
-    let imageUrl = jsonbinRes.data.record.imageUrl;
-    if (!imageUrl) {
-      return res.redirect('https://picsum.photos/600/400');
+    const imageDataUri = jsonbinRes.data.record.imageUrl;
+
+    if (!imageDataUri || !imageDataUri.startsWith('data:image')) {
+      // Jika data kosong, tampilkan gambar transparan kecil, bukan gambar acak
+      return res.status(404).send('Gambar belum diupload');
     }
 
-    // Ambil file gambar langsung dari server ImgBB
-    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    // Parsing data Base64
+    const matches = imageDataUri.match(/^data:(.+);base64,(.+)$/);
+    if (!matches) {
+      return res.status(400).send('Format gambar salah');
+    }
 
-    // Set header tipe konten sesuai gambar asli (image/jpeg, image/png)
-    res.set('Content-Type', imageResponse.headers['content-type'] || 'image/jpeg');
+    const contentType = matches[1];
+    const imageBuffer = Buffer.from(matches[2], 'base64');
+
+    res.set('Content-Type', contentType);
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    
-    // Kirim stream/buffer gambar ke HP pengguna
-    res.send(Buffer.from(imageResponse.data, 'binary'));
+    res.send(imageBuffer);
+
   } catch (err) {
-    console.error('Gagal mengambil gambar via proxy:', err.message);
-    res.redirect('https://picsum.photos/600/400');
+    console.error('Error saat membaca gambar dari JSONbin:', err.response ? err.response.data : err.message);
+    res.status(500).send('Gagal mengambil gambar');
   }
 });
 
-// 2. Upload Gambar ke ImgBB & Simpan URL ke JSONbin
+// 2. Endpoint Upload Gambar (Ubah Gambar ke Base64 & Simpan ke JSONbin)
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan' });
 
-    const formData = new FormData();
-    formData.append('image', req.file.buffer.toString('base64'));
+    // Ubah buffer foto ke format Base64 Data URI
+    const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
 
-    const imgbbRes = await axios.post(
-      `https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`,
-      formData,
-      { headers: formData.getHeaders() }
-    );
-
-    let imageUrl = imgbbRes.data.data.url;
-    if (imageUrl.startsWith('http://')) {
-      imageUrl = imageUrl.replace('http://', 'https://');
-    }
-
-    // Simpan ke JSONbin
+    // Simpan data gambar Base64 ke JSONbin
     await axios.put(
       `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`,
-      { imageUrl: imageUrl },
+      { imageUrl: base64Image },
       {
         headers: {
           'Content-Type': 'application/json',
           'X-Master-Key': JSONBIN_MASTER_KEY
-        }
+        },
+        timeout: 10000
       }
     );
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Gagal mengunggah gambar' });
+    console.error('Error saat upload ke JSONbin:', err.response ? err.response.data : err.message);
+    res.status(500).json({ error: 'Gagal menyimpan gambar ke database.' });
   }
 });
 
