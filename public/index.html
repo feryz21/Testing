@@ -3,98 +3,94 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Menu MBG</title>
+  <title>Menu Hari Ini</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-    body { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #f4f4f9; padding: 20px; }
-    .card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); max-width: 480px; width: 100%; text-align: center; }
-    img { max-width: 100%; height: auto; border-radius: 12px; margin-top: 15px; }
-    .admin-panel { margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee; text-align: left; }
-    input[type="file"] { width: 100%; padding: 10px; margin: 10px 0; border: 1px dashed #007bff; border-radius: 8px; background: #f8f9fa; }
-    button { width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 5px; }
-    button:disabled { background: #aaa; }
-    .hidden { display: none; }
-    .status { margin-top: 12px; font-size: 14px; text-align: center; }
+    body { font-family: Arial, sans-serif; background: #f4f5f7; display: flex; justify-content: center; padding: 20px; }
+    .card { background: white; padding: 20px; border-radius: 12px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    img { width: 100%; height: auto; border-radius: 8px; margin-bottom: 15px; min-height: 200px; background: #eee; object-fit: cover; }
+    .admin-panel { border-top: 1px solid #eee; margin-top: 20px; padding-top: 15px; }
+    button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; }
+    .message { margin-top: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
 
   <div class="card">
     <h2>Menu Hari Ini</h2>
-    <div id="loading">Memuat gambar...</div>
-    <img id="displayImage" src="" alt="Gambar QR" class="hidden" referrerpolicy="no-referrer" crossorigin="anonymous">
+    <img id="menuImage" src="" alt="Gambar Menu" />
 
-    <!-- Panel Admin: Muncul hanya jika ada parameter ?admin=true -->
-    <div id="adminPanel" class="admin-panel hidden">
+    <div id="adminArea" class="admin-panel" style="display: none;">
       <h3>Panel Admin</h3>
-      <p style="font-size: 13px; color: #666; margin-top: 4px;">Pilih foto dari galeri HP kamu:</p>
-      
-      <input type="file" id="fileInput" accept="image/*">
-      <button id="uploadBtn" onclick="uploadImage()">Upload & Simpan Gambar</button>
-      <p id="statusMsg" class="status"></p>
+      <input type="file" id="fileInput" accept="image/*" />
+      <button onclick="uploadImage()">Upload & Simpan Gambar</button>
+      <div id="statusMsg" class="message"></div>
     </div>
   </div>
 
   <script>
-    async function fetchImage() {
+    // Fungsi untuk memuat gambar dengan Cache Buster
+    async function loadImage() {
       try {
         const res = await fetch('/api/image');
         const data = await res.json();
-        const imgEl = document.getElementById('displayImage');
-        imgEl.src = data.imageUrl;
-        imgEl.classList.remove('hidden');
-        document.getElementById('loading').classList.add('hidden');
+        if (data.imageUrl) {
+          // Tambahkan timestamp ?t= untuk menghindari cache browser
+          const cacheBusterUrl = data.imageUrl + (data.imageUrl.includes('?') ? '&t=' : '?t=') + new Date().getTime();
+          document.getElementById('menuImage').src = cacheBusterUrl;
+        }
       } catch (err) {
-        document.getElementById('loading').innerText = 'Gagal memuat gambar.';
+        console.error('Gagal memuat gambar:', err);
       }
     }
 
+    // Fungsi upload dari HP Admin
     async function uploadImage() {
       const fileInput = document.getElementById('fileInput');
       const statusMsg = document.getElementById('statusMsg');
-      const btn = document.getElementById('uploadBtn');
 
-      if (fileInput.files.length === 0) return alert('Silakan pilih foto dari HP terlebih dahulu!');
+      if (!fileInput.files[0]) {
+        alert('Pilih file gambar terlebih dahulu!');
+        return;
+      }
+
+      statusMsg.style.color = 'black';
+      statusMsg.innerText = 'Mengunggah... Mohon tunggu.';
 
       const formData = new FormData();
       formData.append('image', fileInput.files[0]);
-
-      btn.disabled = true;
-      btn.innerText = 'Mengunggah...';
-      statusMsg.style.color = '#007bff';
-      statusMsg.innerText = 'Prosedur upload ke server sedang berjalan...';
 
       try {
         const res = await fetch('/api/upload', {
           method: 'POST',
           body: formData
         });
-        const data = await res.json();
+        const result = await res.json();
 
-        if (data.success) {
+        if (result.success) {
           statusMsg.style.color = 'green';
           statusMsg.innerText = '✅ Gambar berhasil diperbarui secara permanen!';
-          fileInput.value = '';
-          fetchImage();
+          
+          // Langsung ganti src gambar di layar admin dengan timestamp baru
+          const newUrl = result.imageUrl + (result.imageUrl.includes('?') ? '&t=' : '?t=') + new Date().getTime();
+          document.getElementById('menuImage').src = newUrl;
+          fileInput.value = ''; // Clear file input
         } else {
-          statusMsg.style.color = 'red';
-          statusMsg.innerText = '❌ Gagal: ' + (data.error || 'Terjadi kesalahan');
+          throw new Error(result.error);
         }
       } catch (err) {
         statusMsg.style.color = 'red';
-        statusMsg.innerText = '❌ Terjadi kesalahan jaringan.';
-      } finally {
-        btn.disabled = false;
-        btn.innerText = 'Upload & Simpan Gambar';
+        statusMsg.innerText = '❌ Gagal mengunggah gambar.';
       }
     }
 
+    // Tampilkan panel admin jika URL memiliki query ?admin=true
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('admin') === 'true') {
-      document.getElementById('adminPanel').classList.remove('hidden');
+      document.getElementById('adminArea').style.display = 'block';
     }
 
-    fetchImage();
+    // Jalankan saat halaman dibuka
+    loadImage();
   </script>
 </body>
 </html>
