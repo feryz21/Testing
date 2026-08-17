@@ -10,33 +10,42 @@ const PORT = process.env.PORT || 3000;
 // === KUNCI API ===
 const IMGBB_API_KEY = 'f95d0987d63323c055ddbece91a1470e';
 const JSONBIN_BIN_ID = '6a83083af5f4af5e29204dde';
-const JSONBIN_MASTER_KEY = '$2a$10$3ABHbhti5J9x5TwmMwixle2fNiNa3fIUVlpl7tC0LimQBFH4FDj4O';
+const JSONBIN_MASTER_KEY = '$2a$10$0kmCVoz2YzmrWjIHzOhaBuTmadAkcG6rpEJGATIxHnZ1chFV/hodO';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Get URL Gambar
-app.get('/api/image', async (req, res) => {
+// 1. Endpoint Proxy Gambar (HP Pengguna Panggil Ini)
+app.get('/api/view-image', async (req, res) => {
   try {
-    const response = await axios.get(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+    // Ambil URL ImgBB dari JSONbin
+    const jsonbinRes = await axios.get(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
       headers: { 'X-Master-Key': JSONBIN_MASTER_KEY }
     });
-    
-    let url = response.data.record.imageUrl;
-    // Paksa HTTPS
-    if (url && url.startsWith('http://')) {
-      url = url.replace('http://', 'https://');
+
+    let imageUrl = jsonbinRes.data.record.imageUrl;
+    if (!imageUrl) {
+      return res.redirect('https://picsum.photos/600/400');
     }
+
+    // Ambil file gambar langsung dari server ImgBB
+    const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+
+    // Set header tipe konten sesuai gambar asli (image/jpeg, image/png)
+    res.set('Content-Type', imageResponse.headers['content-type'] || 'image/jpeg');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
     
-    res.json({ imageUrl: url });
+    // Kirim stream/buffer gambar ke HP pengguna
+    res.send(Buffer.from(imageResponse.data, 'binary'));
   } catch (err) {
-    res.json({ imageUrl: 'https://picsum.photos/600/400' });
+    console.error('Gagal mengambil gambar via proxy:', err.message);
+    res.redirect('https://picsum.photos/600/400');
   }
 });
 
-// Upload Gambar
+// 2. Upload Gambar ke ImgBB & Simpan URL ke JSONbin
 app.post('/api/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'File tidak ditemukan' });
@@ -67,10 +76,10 @@ app.post('/api/upload', upload.single('image'), async (req, res) => {
       }
     );
 
-    res.json({ success: true, imageUrl });
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Gagal menyimpan gambar' });
+    res.status(500).json({ error: 'Gagal mengunggah gambar' });
   }
 });
 
