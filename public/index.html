@@ -28,69 +28,61 @@
   </div>
 
   <script>
-    // Fungsi untuk memuat gambar dengan Cache Buster
-    async function loadImage() {
-      try {
-        const res = await fetch('/api/image');
-        const data = await res.json();
-        if (data.imageUrl) {
-          // Tambahkan timestamp ?t= untuk menghindari cache browser
-          const cacheBusterUrl = data.imageUrl + (data.imageUrl.includes('?') ? '&t=' : '?t=') + new Date().getTime();
-          document.getElementById('menuImage').src = cacheBusterUrl;
-        }
-      } catch (err) {
-        console.error('Gagal memuat gambar:', err);
-      }
+  // Fungsi memuat gambar via Proxy Railway
+  function loadImage() {
+    const imgEl = document.getElementById('menuImage');
+    // Panggil endpoint proxy + timestamp agar bebas cache
+    imgEl.src = '/api/view-image?t=' + new Date().getTime();
+  }
+
+  // Fungsi upload dari HP Admin
+  async function uploadImage() {
+    const fileInput = document.getElementById('fileInput');
+    const statusMsg = document.getElementById('statusMsg');
+
+    if (!fileInput.files[0]) {
+      alert('Pilih file gambar terlebih dahulu!');
+      return;
     }
 
-    // Fungsi upload dari HP Admin
-    async function uploadImage() {
-      const fileInput = document.getElementById('fileInput');
-      const statusMsg = document.getElementById('statusMsg');
+    statusMsg.style.color = 'black';
+    statusMsg.innerText = 'Mengunggah... Mohon tunggu.';
 
-      if (!fileInput.files[0]) {
-        alert('Pilih file gambar terlebih dahulu!');
-        return;
+    const formData = new FormData();
+    formData.append('image', fileInput.files[0]);
+
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const result = await res.json();
+
+      if (result.success) {
+        statusMsg.style.color = 'green';
+        statusMsg.innerText = '✅ Gambar berhasil diperbarui!';
+        
+        // Reload gambar lewat proxy
+        loadImage();
+        fileInput.value = '';
+      } else {
+        throw new Error(result.error);
       }
-
-      statusMsg.style.color = 'black';
-      statusMsg.innerText = 'Mengunggah... Mohon tunggu.';
-
-      const formData = new FormData();
-      formData.append('image', fileInput.files[0]);
-
-      try {
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        const result = await res.json();
-
-        if (result.success) {
-          statusMsg.style.color = 'green';
-          statusMsg.innerText = '✅ Gambar berhasil diperbarui secara permanen!';
-          
-          // Langsung ganti src gambar di layar admin dengan timestamp baru
-          const newUrl = result.imageUrl + (result.imageUrl.includes('?') ? '&t=' : '?t=') + new Date().getTime();
-          document.getElementById('menuImage').src = newUrl;
-          fileInput.value = ''; // Clear file input
-        } else {
-          throw new Error(result.error);
-        }
-      } catch (err) {
-        statusMsg.style.color = 'red';
-        statusMsg.innerText = '❌ Gagal mengunggah gambar.';
-      }
+    } catch (err) {
+      statusMsg.style.color = 'red';
+      statusMsg.innerText = '❌ Gagal mengunggah gambar.';
     }
+  }
 
-    // Tampilkan panel admin jika URL memiliki query ?admin=true
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('admin') === 'true') {
-      document.getElementById('adminArea').style.display = 'block';
-    }
+  // Tampilkan panel admin jika URL memiliki query ?admin=true
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('admin') === 'true') {
+    document.getElementById('adminArea').style.display = 'block';
+  }
 
-    // Jalankan saat halaman dibuka
-    loadImage();
-  </script>
+  // Jalankan saat halaman dibuka
+  loadImage();
+</script>
+
 </body>
 </html>
